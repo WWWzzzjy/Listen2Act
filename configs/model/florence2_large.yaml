@@ -1,0 +1,19 @@
+model_name: microsoft/Florence-2-large
+trust_remote_code: true
+image_size: 224
+action_chunk_size: 8
+action_dim: 7
+action_head_hidden_dim: 1024
+action_head_depth: 3
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - out_proj
+precision: fp16
+bf16: false
+use_flash_attention_2: false
+

@@ -1,0 +1,14 @@
+suite_name: libero_object
+checkpoint_path: checkpoints/bc_v100s/best
+output_dir: data/eval_videos
+results_path: data/eval_videos/libero_eval_results.json
+episodes_per_task: 20
+max_episode_steps: 600
+fps: 20
+video_quality: 5
+seed: 123
+task_ids: []
+language: en
+save_videos: true
+headless_backend: egl
+

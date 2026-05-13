@@ -1,0 +1,37 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# Local secrets and runtime state
+.env
+wandb/
+outputs/
+runs/
+checkpoints/
+logs/
+
+# Large datasets and generated artifacts
+data/libero/*
+!data/libero/.gitkeep
+data/instructions_zh/*
+!data/instructions_zh/.gitkeep
+data/paraphrases/*
+!data/paraphrases/.gitkeep
+data/eval_videos/*
+!data/eval_videos/.gitkeep
+*.mp4
+*.hdf5
+*.h5
+*.pt
+*.pth
+*.safetensors
+

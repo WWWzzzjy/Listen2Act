@@ -1,0 +1,11 @@
+suite_name: libero_object
+data_root: data/libero
+train_split: train
+val_split: val
+image_size: 224
+action_chunk_size: 8
+language_sampling: en
+use_paraphrases: false
+translations_path: data/instructions_zh/libero_object_zh.json
+paraphrases_path: data/paraphrases/libero_object_paraphrases.json
+
