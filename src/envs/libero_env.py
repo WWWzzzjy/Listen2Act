@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -151,8 +152,9 @@ def _make_offscreen_libero_env(suite_name: str, task_id: int, image_size: int) -
         from libero.libero.envs import OffScreenRenderEnv
     except ImportError as exc:
         raise ImportError(
-            "LIBERO is not installed. Run env_setup/setup_remote_server.sh or install "
-            "the official LIBERO repository before evaluation."
+            "Could not import LIBERO runtime modules. Run "
+            "`bash env_setup/setup_active_env.sh` in the active Python environment. "
+            f"Original import error: {type(exc).__name__}: {exc}"
         ) from exc
 
     benchmark_dict = benchmark.get_benchmark_dict()
@@ -193,6 +195,8 @@ def _ensure_project_libero_config() -> None:
     benchmark_root = libero_root.resolve() / "libero" / "libero"
     if not benchmark_root.exists():
         return
+    if str(libero_root.resolve()) not in sys.path:
+        sys.path.insert(0, str(libero_root.resolve()))
     datasets = Path(os.environ.get("LIBERO_DATASETS", project_root / "data" / "libero")).expanduser()
     if not datasets.is_absolute():
         datasets = project_root / datasets

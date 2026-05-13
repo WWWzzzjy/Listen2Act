@@ -31,6 +31,9 @@ mkdir -p external
 if [ ! -d external/LIBERO ]; then
   git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
 fi
+if [ -f external/LIBERO/requirements.txt ]; then
+  python -m pip install --no-build-isolation -r external/LIBERO/requirements.txt
+fi
 python -m pip install --no-build-isolation -e external/LIBERO
 
 python env_setup/init_libero_config.py --libero-root external/LIBERO --datasets data/libero
@@ -38,4 +41,3 @@ python env_setup/configure_headless_backend.py --env-file .env.headless
 
 echo "Setup complete for active Python environment."
 echo "Run: source .env.headless && python env_setup/verify_libero.py"
-

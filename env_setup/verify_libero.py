@@ -25,6 +25,10 @@ def main() -> int:
     print(f"Headless backend configured: {status.backend}")
     config_path = write_libero_config(project_root=PROJECT_ROOT)
     print(f"LIBERO config initialized: {config_path}")
+    ok, message = _verify_libero_imports()
+    print(message)
+    if not ok:
+        return 1
     try:
         env = LiberoEnv(suite_name="libero_object", task_id=0, seed=0, record_video=True)
         obs = env.reset()
@@ -40,6 +44,22 @@ def main() -> int:
         f"obs_shape={obs['rgb'].shape} next_shape={frame.shape} reward={reward} done={done} info_keys={list(info.keys())}"
     )
     return 0
+
+
+def _verify_libero_imports() -> tuple[bool, str]:
+    """Verify official LIBERO modules and report the exact import error."""
+    try:
+        from libero.libero import benchmark
+        from libero.libero.envs import OffScreenRenderEnv
+
+        suites = list(benchmark.get_benchmark_dict().keys())[:10]
+    except Exception as exc:
+        return (
+            False,
+            "ERROR: LIBERO import failed before env creation. "
+            f"{type(exc).__name__}: {exc}",
+        )
+    return True, f"LIBERO imports OK. suites={suites}, env={OffScreenRenderEnv.__name__}"
 
 
 if __name__ == "__main__":
