@@ -13,6 +13,7 @@ dist/
 
 # Local secrets and runtime state
 .env
+.env.headless
 wandb/
 outputs/
 runs/
@@ -34,4 +35,3 @@ data/eval_videos/*
 *.pt
 *.pth
 *.safetensors
-

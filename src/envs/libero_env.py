@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -144,8 +145,9 @@ class LiberoEnv:
 
 def _make_offscreen_libero_env(suite_name: str, task_id: int, image_size: int) -> Any:
     """Construct the official LIBERO OffScreenRenderEnv."""
+    _ensure_project_libero_config()
     try:
-        from libero.libero import benchmark
+        from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
     except ImportError as exc:
         raise ImportError(
@@ -157,7 +159,7 @@ def _make_offscreen_libero_env(suite_name: str, task_id: int, image_size: int) -
     suite_factory = benchmark_dict[suite_name]
     suite = suite_factory()
     task = suite.get_task(task_id)
-    bddl_file = _resolve_task_bddl(task)
+    bddl_file = _resolve_task_bddl(task, bddl_root=Path(get_libero_path("bddl_files")))
     env_args = {
         "bddl_file_name": str(bddl_file),
         "camera_heights": image_size,
@@ -167,19 +169,61 @@ def _make_offscreen_libero_env(suite_name: str, task_id: int, image_size: int) -
         "use_camera_obs": True,
         "camera_names": ["agentview", "robot0_eye_in_hand"],
     }
-    return OffScreenRenderEnv(**env_args)
+    try:
+        return OffScreenRenderEnv(**env_args)
+    except TypeError as exc:
+        LOGGER.warning("Retrying OffScreenRenderEnv with minimal LIBERO args after: %s", exc)
+        return OffScreenRenderEnv(
+            bddl_file_name=str(bddl_file),
+            camera_heights=image_size,
+            camera_widths=image_size,
+        )
 
 
-def _resolve_task_bddl(task: Any) -> Path | str:
+def _ensure_project_libero_config() -> None:
+    """Create LIBERO's config file from the project checkout when absent."""
+    config_dir = Path(os.environ.get("LIBERO_CONFIG_PATH", "~/.libero")).expanduser()
+    config_file = config_dir / "config.yaml"
+    if config_file.exists():
+        return
+    project_root = Path.cwd()
+    libero_root = Path(os.environ.get("LIBERO_ROOT", project_root / "external" / "LIBERO")).expanduser()
+    if not libero_root.is_absolute():
+        libero_root = project_root / libero_root
+    benchmark_root = libero_root.resolve() / "libero" / "libero"
+    if not benchmark_root.exists():
+        return
+    datasets = Path(os.environ.get("LIBERO_DATASETS", project_root / "data" / "libero")).expanduser()
+    if not datasets.is_absolute():
+        datasets = project_root / datasets
+    datasets.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config = {
+        "benchmark_root": benchmark_root,
+        "bddl_files": benchmark_root / "bddl_files",
+        "init_states": benchmark_root / "init_files",
+        "datasets": datasets.resolve(),
+        "assets": benchmark_root / "assets",
+    }
+    config_file.write_text(
+        "\n".join(f"{key}: {value}" for key, value in config.items()) + "\n",
+        encoding="utf-8",
+    )
+    LOGGER.info("Initialized LIBERO config at %s", config_file)
+
+
+def _resolve_task_bddl(task: Any, bddl_root: Path | None = None) -> Path | str:
     """Resolve a LIBERO task BDDL path across common task object layouts."""
-    for attr in ("bddl_file", "bddl_file_name"):
-        value = getattr(task, attr, None)
-        if value:
-            return value
     problem_folder = getattr(task, "problem_folder", None)
-    bddl_file = getattr(task, "bddl_file_name", None)
+    bddl_file = getattr(task, "bddl_file", None) or getattr(task, "bddl_file_name", None)
     if problem_folder and bddl_file:
-        return Path(problem_folder) / bddl_file
+        relative = Path(problem_folder) / str(bddl_file)
+        return bddl_root / relative if bddl_root is not None else relative
+    if bddl_file:
+        path = Path(str(bddl_file))
+        if path.is_absolute() or bddl_root is None:
+            return path
+        return bddl_root / path
     raise AttributeError("Could not resolve BDDL file from LIBERO task object.")
 
 
@@ -224,4 +268,3 @@ def _to_uint8_rgb(frame: Any) -> np.ndarray:
             array = array * 255.0
         array = np.clip(array, 0, 255).astype(np.uint8)
     return array[..., :3]
-

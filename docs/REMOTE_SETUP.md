@@ -20,6 +20,25 @@ python env_setup/verify_headless_rendering.py
 python env_setup/verify_libero.py
 ```
 
+## Active Conda Environment
+
+If the server already provides a conda environment, activate it first and install
+into that environment:
+
+```bash
+conda activate py310
+bash env_setup/setup_active_env.sh
+source .env.headless
+python env_setup/verify_gpu.py
+python env_setup/verify_headless_rendering.py
+python env_setup/verify_libero.py
+```
+
+`setup_active_env.sh` also initializes LIBERO's `~/.libero/config.yaml`
+non-interactively and writes `.env.headless` with the first working MuJoCo
+backend. On containers without NVIDIA graphics capability this may be `osmesa`
+instead of `egl`.
+
 ## Conda Alternative
 
 ```bash
@@ -54,4 +73,3 @@ bash scripts/run_bc_train.sh
 ```
 
 Detach with `Ctrl-b d`, reattach with `tmux attach -t simvoicevla`.
-

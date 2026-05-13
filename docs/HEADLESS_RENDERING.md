@@ -19,6 +19,14 @@ Smoke test:
 python env_setup/verify_headless_rendering.py
 ```
 
+To automatically write a reusable `.env.headless` file with the first working
+backend:
+
+```bash
+python env_setup/configure_headless_backend.py --env-file .env.headless
+source .env.headless
+```
+
 Common failures:
 
 - `Could not initialize EGL`: host driver or EGL library is unavailable.
@@ -26,4 +34,3 @@ Common failures:
 - GLFW/X11 errors: a simulator import happened before `MUJOCO_GL=egl`; restart the process.
 
 The codebase never calls `env.render(mode="human")`. Videos are saved from RGB arrays with ImageIO.
-

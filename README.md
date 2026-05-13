@@ -29,6 +29,17 @@ Remote setup:
 
 ```bash
 bash env_setup/setup_remote_server.sh
+source .venv/bin/activate
+source .env.headless
+python env_setup/verify_libero.py
+```
+
+If you are already inside a Python 3.10/3.11 conda environment, install into that
+active environment instead of creating `.venv`:
+
+```bash
+bash env_setup/setup_active_env.sh
+source .env.headless
 python env_setup/verify_gpu.py
 python env_setup/verify_headless_rendering.py
 python env_setup/verify_libero.py
@@ -111,4 +122,3 @@ SimVoiceVLA 是一个基于 LIBERO 仿真的双语视觉-语言-动作项目。�
 - 结果表格暂留 `TBD`，不要在没有真实实验前填写 benchmark 数字。
 
 See `docs/` for detailed setup, architecture, training, evaluation, hardware, and data notes.
-

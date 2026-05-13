@@ -50,12 +50,7 @@ if [ ! -d external/LIBERO ]; then
   git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
 fi
 python -m pip install --no-build-isolation -e external/LIBERO
-
-cat > .env.headless <<'EOF'
-export MUJOCO_GL=egl
-export PYOPENGL_PLATFORM=egl
-export MUJOCO_EGL_DEVICE_ID=0
-export EGL_DEVICE_ID=0
-EOF
+python env_setup/init_libero_config.py --libero-root external/LIBERO --datasets data/libero
+python env_setup/configure_headless_backend.py --env-file .env.headless
 
 echo "Setup complete. Run: source .venv/bin/activate && source .env.headless"
