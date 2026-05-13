@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import random
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,9 @@ INSTRUCTION_ATTR_NAMES = (
     "lang",
     "natural_language_instruction",
 )
+ENV_ARGS_ATTR_NAMES = ("env_args", "env_kwargs", "environment_args")
+UNKNOWN_INSTRUCTION = "unknown task"
+FILENAME_SUFFIXES = ("_demo", "_demos", "_trajectory", "_trajectories")
 
 
 @dataclass(frozen=True)
@@ -140,7 +144,7 @@ class LiberoDataset(Dataset[dict[str, Any]]):
                 with h5py.File(path, "r") as handle:
                     for group_path, group in _iter_demo_groups(handle):
                         actions = np.asarray(_require_dataset(group, ACTION_DATASET_NAMES))
-                        instruction = _read_instruction(group, handle)
+                        instruction = _read_instruction(group, handle, path)
                         for step in range(actions.shape[0]):
                             index.append(
                                 DemoSampleIndex(
@@ -208,16 +212,33 @@ def _get_nested(group: h5py.Group | h5py.File, path: str) -> h5py.Group | h5py.D
     return current
 
 
-def _read_instruction(group: h5py.Group, handle: h5py.File) -> str:
+def _read_instruction(group: h5py.Group, handle: h5py.File, hdf5_path: Path) -> str:
     """Read a language instruction from group or file attributes."""
-    for source in (group, handle):
+    sources = [group]
+    if isinstance(group.parent, h5py.Group):
+        sources.append(group.parent)
+    sources.append(handle)
+    for source in sources:
         for key in INSTRUCTION_ATTR_NAMES:
             if key in source.attrs:
-                return _decode_text(source.attrs[key])
+                instruction = _decode_text(source.attrs[key]).strip()
+                if instruction and instruction != UNKNOWN_INSTRUCTION:
+                    return instruction
     if "instruction" in group and isinstance(group["instruction"], h5py.Dataset):
         value = group["instruction"][()]
-        return _decode_text(value)
-    return "unknown task"
+        instruction = _decode_text(value).strip()
+        if instruction and instruction != UNKNOWN_INSTRUCTION:
+            return instruction
+
+    instruction = _instruction_from_env_args(group, handle)
+    if instruction:
+        return instruction
+
+    instruction = _instruction_from_benchmark_lookup(hdf5_path)
+    if instruction:
+        return instruction
+
+    return _instruction_from_filename(hdf5_path)
 
 
 def _decode_text(value: Any) -> str:
@@ -227,6 +248,190 @@ def _decode_text(value: Any) -> str:
     if isinstance(value, np.ndarray) and value.shape == ():
         return _decode_text(value.item())
     return str(value)
+
+
+def _instruction_from_env_args(group: h5py.Group, handle: h5py.File) -> str | None:
+    """Resolve an instruction through robomimic/LIBERO env args metadata."""
+    for source in (group, group.parent, handle):
+        if source is None:
+            continue
+        for key in ENV_ARGS_ATTR_NAMES:
+            if key not in source.attrs:
+                continue
+            payload = _parse_jsonish_attr(source.attrs[key])
+            instruction = _instruction_from_metadata(payload)
+            if instruction:
+                return instruction
+    return None
+
+
+def _parse_jsonish_attr(value: Any) -> Any:
+    """Parse HDF5 attrs that may store JSON as bytes or strings."""
+    text = _decode_text(value).strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+
+def _instruction_from_metadata(payload: Any) -> str | None:
+    """Extract an instruction from known metadata layouts."""
+    if isinstance(payload, str):
+        return _instruction_from_bddl_reference(payload)
+    if not isinstance(payload, dict):
+        return None
+    for key in INSTRUCTION_ATTR_NAMES:
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for key in ("bddl_file_name", "bddl_file", "problem_name"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            instruction = _instruction_from_bddl_reference(value)
+            if instruction:
+                return instruction
+    for nested_key in ("env_kwargs", "env_args", "task"):
+        instruction = _instruction_from_metadata(payload.get(nested_key))
+        if instruction:
+            return instruction
+    return None
+
+
+def _instruction_from_bddl_reference(reference: str) -> str | None:
+    """Resolve an instruction from a BDDL path or filename."""
+    lookup = _load_benchmark_instruction_lookup()
+    keys = _candidate_lookup_keys(Path(reference))
+    for key in keys:
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
+def _instruction_from_benchmark_lookup(path: Path) -> str | None:
+    """Resolve an instruction by matching the HDF5 filename to LIBERO tasks."""
+    lookup = _load_benchmark_instruction_lookup()
+    for key in _candidate_lookup_keys(path):
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
+@lru_cache(maxsize=1)
+def _load_benchmark_instruction_lookup() -> dict[str, str]:
+    """Build a best-effort mapping from LIBERO BDDL names to task language."""
+    try:
+        from libero.libero import benchmark
+    except Exception:
+        return {}
+    lookup: dict[str, str] = {}
+    try:
+        benchmark_dict = benchmark.get_benchmark_dict()
+    except Exception:
+        return lookup
+    for suite_factory in benchmark_dict.values():
+        try:
+            suite = suite_factory()
+            task_count = _infer_task_count(suite)
+            for task_id in range(task_count):
+                task = suite.get_task(task_id)
+                language = _task_language(task)
+                if not language:
+                    continue
+                for reference in _task_bddl_references(task):
+                    for key in _candidate_lookup_keys(Path(reference)):
+                        lookup[key] = language
+        except Exception:
+            continue
+    return lookup
+
+
+def _infer_task_count(suite: Any) -> int:
+    """Infer the number of tasks in a LIBERO benchmark suite."""
+    for attr in ("n_tasks", "num_tasks"):
+        value = getattr(suite, attr, None)
+        if isinstance(value, int):
+            return value
+    tasks = getattr(suite, "tasks", None)
+    if isinstance(tasks, list):
+        return len(tasks)
+    if hasattr(suite, "get_num_tasks"):
+        try:
+            return int(suite.get_num_tasks())
+        except Exception:
+            pass
+    return 0
+
+
+def _task_language(task: Any) -> str | None:
+    """Read task language across common LIBERO task object layouts."""
+    for attr in ("language", "language_instruction", "task_description", "description"):
+        value = getattr(task, attr, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _task_bddl_references(task: Any) -> list[str]:
+    """Collect BDDL-like references from a LIBERO task object."""
+    references: list[str] = []
+    for attr in ("bddl_file", "bddl_file_name", "problem_name"):
+        value = getattr(task, attr, None)
+        if value:
+            references.append(str(value))
+    problem_folder = getattr(task, "problem_folder", None)
+    bddl_file = getattr(task, "bddl_file", None) or getattr(task, "bddl_file_name", None)
+    if problem_folder and bddl_file:
+        references.append(str(Path(str(problem_folder)) / str(bddl_file)))
+    return references
+
+
+def _candidate_lookup_keys(path: Path) -> list[str]:
+    """Produce normalized lookup keys for BDDL/HDF5 paths."""
+    keys = []
+    for value in (path.name, path.stem, str(path), path.as_posix()):
+        normalized = _normalize_lookup_key(value)
+        if normalized and normalized not in keys:
+            keys.append(normalized)
+    instruction_key = _normalize_lookup_key(_filename_to_instruction_text(path.stem))
+    if instruction_key and instruction_key not in keys:
+        keys.append(instruction_key)
+    return keys
+
+
+def _normalize_lookup_key(value: str) -> str:
+    """Normalize filenames and task names for fuzzy lookup."""
+    text = value.lower().strip()
+    for suffix in (".hdf5", ".h5", ".bddl"):
+        if text.endswith(suffix):
+            text = text[: -len(suffix)]
+    for suffix in FILENAME_SUFFIXES:
+        if text.endswith(suffix):
+            text = text[: -len(suffix)]
+    return text.replace("\\", "/").replace("_", " ").strip()
+
+
+def _instruction_from_filename(path: Path) -> str:
+    """Recover a readable instruction from an official LIBERO demo filename."""
+    instruction = _filename_to_instruction_text(path.stem)
+    return instruction if instruction else UNKNOWN_INSTRUCTION
+
+
+def _filename_to_instruction_text(stem: str) -> str:
+    """Convert a LIBERO file stem to a natural-language instruction."""
+    text = stem.lower()
+    for suffix in FILENAME_SUFFIXES:
+        if text.endswith(suffix):
+            text = text[: -len(suffix)]
+    parts = [part for part in text.split("_") if part]
+    while parts and (parts[0] in {"libero", "object", "spatial", "goal"} or parts[0].isdigit()):
+        parts.pop(0)
+    if len(parts) >= 2 and parts[0] in {"kitchen", "living", "study"} and parts[1].startswith("scene"):
+        parts = parts[2:]
+    if parts and parts[0].startswith("scene"):
+        parts = parts[1:]
+    return " ".join(parts).strip()
 
 
 def _find_rgb_dataset(group: h5py.Group) -> h5py.Dataset:
