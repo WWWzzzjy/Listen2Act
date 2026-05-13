@@ -2,3 +2,6 @@
 # which exists in robosuite 1.4.x and was removed in robosuite 1.5.x.
 robosuite==1.4.1
 
+# LIBERO's official requirements pin the BEHAVIOR-100 BDDL parser.
+bddl==1.0.1
+

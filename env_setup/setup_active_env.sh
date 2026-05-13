@@ -31,10 +31,8 @@ mkdir -p external
 if [ ! -d external/LIBERO ]; then
   git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
 fi
-if [ -f external/LIBERO/requirements.txt ]; then
-  python -m pip install --no-build-isolation -c env_setup/libero_constraints.txt -r external/LIBERO/requirements.txt
-fi
-python -m pip install --no-build-isolation --force-reinstall "robosuite==1.4.1"
+python -m pip install --no-build-isolation -c env_setup/libero_constraints.txt -r env_setup/libero_runtime_requirements.txt
+python -m pip install --no-build-isolation --no-deps --force-reinstall "robosuite==1.4.1" "bddl==1.0.1"
 python -m pip install --no-build-isolation -e external/LIBERO
 
 python env_setup/init_libero_config.py --libero-root external/LIBERO --datasets data/libero

@@ -1,0 +1,12 @@
+# Curated LIBERO runtime dependencies.
+#
+# The official LIBERO requirements file pins older VLM/training packages such as
+# transformers, hydra-core, numpy, and wandb. SimVoiceVLA keeps modern versions
+# for Florence-2 while installing the simulator/runtime packages LIBERO imports.
+robosuite==1.4.1
+bddl==1.0.1
+cloudpickle==2.1.0
+easydict==1.9
+future==0.18.2
+gym==0.25.2
+thop==0.1.1.post2209072238

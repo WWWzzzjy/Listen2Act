@@ -41,8 +41,9 @@ instead of `egl`.
 
 LIBERO currently expects robosuite 1.4.x APIs such as
 `robosuite.environments.manipulation.single_arm_env`, so the setup scripts pin
-`robosuite==1.4.1` and apply `env_setup/libero_constraints.txt` when installing
-LIBERO's requirements.
+`robosuite==1.4.1`. They also install `bddl==1.0.1`, matching LIBERO's
+official requirements. The curated runtime requirements file avoids downgrading
+SimVoiceVLA's Florence-2 stack while still installing LIBERO simulator imports.
 
 ## Conda Alternative
 
