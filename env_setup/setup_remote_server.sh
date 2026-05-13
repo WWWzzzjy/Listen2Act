@@ -43,15 +43,16 @@ esac
 "${PYTHON_BIN}" -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip==24.0 setuptools==70.2.0 wheel==0.43.0
-python -m pip install --no-build-isolation -r requirements.txt
+python -m pip install --no-build-isolation -c env_setup/libero_constraints.txt -r requirements.txt
 
 mkdir -p external
 if [ ! -d external/LIBERO ]; then
   git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
 fi
 if [ -f external/LIBERO/requirements.txt ]; then
-  python -m pip install --no-build-isolation -r external/LIBERO/requirements.txt
+  python -m pip install --no-build-isolation -c env_setup/libero_constraints.txt -r external/LIBERO/requirements.txt
 fi
+python -m pip install --no-build-isolation --force-reinstall "robosuite==1.4.1"
 python -m pip install --no-build-isolation -e external/LIBERO
 python env_setup/init_libero_config.py --libero-root external/LIBERO --datasets data/libero
 python env_setup/configure_headless_backend.py --env-file .env.headless

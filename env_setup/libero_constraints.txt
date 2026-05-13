@@ -1,0 +1,4 @@
+# LIBERO imports robosuite.environments.manipulation.single_arm_env,
+# which exists in robosuite 1.4.x and was removed in robosuite 1.5.x.
+robosuite==1.4.1
+

@@ -39,6 +39,11 @@ non-interactively and writes `.env.headless` with the first working MuJoCo
 backend. On containers without NVIDIA graphics capability this may be `osmesa`
 instead of `egl`.
 
+LIBERO currently expects robosuite 1.4.x APIs such as
+`robosuite.environments.manipulation.single_arm_env`, so the setup scripts pin
+`robosuite==1.4.1` and apply `env_setup/libero_constraints.txt` when installing
+LIBERO's requirements.
+
 ## Conda Alternative
 
 ```bash

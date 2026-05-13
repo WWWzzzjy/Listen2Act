@@ -49,6 +49,7 @@ def main() -> int:
 def _verify_libero_imports() -> tuple[bool, str]:
     """Verify official LIBERO modules and report the exact import error."""
     try:
+        import robosuite
         from libero.libero import benchmark
         from libero.libero.envs import OffScreenRenderEnv
 
@@ -59,7 +60,12 @@ def _verify_libero_imports() -> tuple[bool, str]:
             "ERROR: LIBERO import failed before env creation. "
             f"{type(exc).__name__}: {exc}",
         )
-    return True, f"LIBERO imports OK. suites={suites}, env={OffScreenRenderEnv.__name__}"
+    return (
+        True,
+        "LIBERO imports OK. "
+        f"robosuite={getattr(robosuite, '__version__', 'unknown')}, "
+        f"suites={suites}, env={OffScreenRenderEnv.__name__}",
+    )
 
 
 if __name__ == "__main__":
