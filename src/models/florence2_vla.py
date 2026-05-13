@@ -193,12 +193,11 @@ class Florence2VLA(nn.Module):
         tokenizer = getattr(processor, "tokenizer", None)
         if tokenizer is not None:
             ensure_tokenizer_padding(tokenizer)
-        backbone = AutoModelForCausalLM.from_pretrained(
-            model_name,
+        backbone = _load_model_with_safetensors_fallback(
+            AutoModelForCausalLM,
+            model_name=model_name,
             revision=model_revision,
             trust_remote_code=trust_remote_code,
-            torch_dtype=torch.float16,
-            attn_implementation="sdpa",
         )
         lora_config = LoraConfig(
             r=lora_rank,
@@ -279,6 +278,45 @@ def _extract_hidden(outputs: Any) -> torch.Tensor:
             if isinstance(value, (list, tuple)) and value:
                 return value[-1]
     raise RuntimeError("Could not extract hidden states from Florence-2 outputs.")
+
+
+def _load_model_with_safetensors_fallback(
+    auto_model_cls: Any,
+    model_name: str,
+    revision: str | None,
+    trust_remote_code: bool,
+) -> nn.Module:
+    """Load Florence-2 and fall back when safetensors metadata is absent.
+
+    Args:
+        auto_model_cls: HuggingFace auto model class.
+        model_name: Model identifier.
+        revision: Optional pinned revision.
+        trust_remote_code: Whether remote code is allowed.
+
+    Returns:
+        Loaded model.
+    """
+    backbone_kwargs = {
+        "revision": revision,
+        "trust_remote_code": trust_remote_code,
+        "torch_dtype": torch.float16,
+        "attn_implementation": "sdpa",
+    }
+    try:
+        return auto_model_cls.from_pretrained(model_name, **backbone_kwargs)
+    except AttributeError as exc:
+        if "'NoneType' object has no attribute 'get'" not in str(exc):
+            raise
+        LOGGER.warning(
+            "Safetensors metadata was missing for %s; retrying with pytorch_model.bin.",
+            model_name,
+        )
+        return auto_model_cls.from_pretrained(
+            model_name,
+            **backbone_kwargs,
+            use_safetensors=False,
+        )
 
 
 def _masked_mean_pool(hidden: torch.Tensor, attention_mask: torch.Tensor | None) -> torch.Tensor:
