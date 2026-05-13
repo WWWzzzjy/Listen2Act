@@ -93,6 +93,7 @@ class BCTrainer:
         self.config = config
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
+        _cast_trainable_parameters_to_fp32(self.model)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.optimizer = torch.optim.AdamW(
@@ -295,6 +296,19 @@ def build_dataloaders(
         drop_last=False,
     )
     return train_loader, val_loader
+
+
+def _cast_trainable_parameters_to_fp32(model: torch.nn.Module) -> None:
+    """Keep optimizer-owned parameters in fp32 for AMP GradScaler compatibility.
+
+    Args:
+        model: Training model.
+    """
+    for parameter in model.parameters():
+        if parameter.requires_grad and parameter.dtype != torch.float32:
+            parameter.data = parameter.data.float()
+            if parameter.grad is not None:
+                parameter.grad.data = parameter.grad.data.float()
 
 
 def main() -> None:

@@ -205,6 +205,7 @@ class Florence2VLA(nn.Module):
             bias="none",
         )
         backbone = get_peft_model(backbone, lora_config)
+        _cast_trainable_parameters(backbone, torch.float32)
         LOGGER.info("Loaded %s with LoRA rank=%d alpha=%d", model_name, lora_rank, lora_alpha)
         return processor, backbone
 
@@ -354,6 +355,20 @@ def _unwrap_peft_model(model: nn.Module) -> nn.Module:
         if isinstance(nested_model, nn.Module):
             return nested_model
     return model
+
+
+def _cast_trainable_parameters(model: nn.Module, dtype: torch.dtype = torch.float32) -> None:
+    """Cast trainable parameters to a dtype compatible with GradScaler.
+
+    Args:
+        model: Module containing frozen fp16 backbone weights and trainable adapters.
+        dtype: Target dtype for trainable parameters.
+    """
+    for parameter in model.parameters():
+        if parameter.requires_grad and parameter.dtype != dtype:
+            parameter.data = parameter.data.to(dtype=dtype)
+            if parameter.grad is not None:
+                parameter.grad.data = parameter.grad.data.to(dtype=dtype)
 
 
 def _load_model_with_safetensors_fallback(

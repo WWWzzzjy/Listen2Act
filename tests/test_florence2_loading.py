@@ -5,6 +5,7 @@ from torch import nn
 
 from src.models.florence2_vla import _load_model_with_safetensors_fallback
 from src.models.florence2_vla import _encode_florence2_multimodal_features
+from src.models.florence2_vla import _cast_trainable_parameters
 
 
 class FakeAutoModel:
@@ -78,3 +79,14 @@ def test_encode_florence_features_uses_encoder_only() -> None:
     assert hidden.shape == (1, 5, 4)
     assert attention_mask.shape == (1, 5)
     assert backbone.decoder_called is False
+
+
+def test_cast_trainable_parameters_keeps_frozen_fp16() -> None:
+    model = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 2))
+    model[0].requires_grad_(False)
+    model.half()
+
+    _cast_trainable_parameters(model)
+
+    assert model[0].weight.dtype == torch.float16
+    assert model[1].weight.dtype == torch.float32
