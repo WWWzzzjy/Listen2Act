@@ -302,5 +302,5 @@ def _preprocess_rgb(rgb: np.ndarray, image_size: int) -> torch.Tensor:
         array = np.clip(array, 0, 255).astype(np.uint8)
     image = Image.fromarray(array[..., :3])
     image = image.resize((image_size, image_size), Image.BICUBIC)
-    tensor = torch.from_numpy(np.asarray(image)).permute(2, 0, 1).float() / 255.0
+    tensor = torch.from_numpy(np.array(image, copy=True)).permute(2, 0, 1).float() / 255.0
     return (tensor - FLORENCE_MEAN) / FLORENCE_STD

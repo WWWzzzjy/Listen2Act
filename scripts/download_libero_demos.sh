@@ -2,23 +2,42 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_DIR="${PROJECT_ROOT}/data/libero"
+cd "${PROJECT_ROOT}"
+
+DATASET="${LIBERO_DATASET:-libero_object}"
+TARGET_DIR="${LIBERO_DATA_DIR:-${PROJECT_ROOT}/data/libero}"
+
 mkdir -p "${TARGET_DIR}"
+export PYTHONPATH="${PROJECT_ROOT}:${PROJECT_ROOT}/external/LIBERO:${PYTHONPATH:-}"
 
-if [ -z "${LIBERO_DEMO_URL:-}" ]; then
-  cat <<'MSG'
-LIBERO_DEMO_URL is not set.
+python - <<PY
+from __future__ import annotations
 
-Download the official LIBERO demonstration archive from the LIBERO project page,
-then either extract it into data/libero manually or rerun this script with:
+from pathlib import Path
 
-  LIBERO_DEMO_URL=https://.../libero_object_demos.tar.gz scripts/download_libero_demos.sh
-MSG
-  exit 0
-fi
+from env_setup.init_libero_config import write_libero_config
 
-ARCHIVE="${TARGET_DIR}/libero_demos.tar.gz"
-curl -L "${LIBERO_DEMO_URL}" -o "${ARCHIVE}"
-tar -xzf "${ARCHIVE}" -C "${TARGET_DIR}"
-echo "LIBERO demos extracted to ${TARGET_DIR}"
+project_root = Path("${PROJECT_ROOT}").resolve()
+download_dir = Path("${TARGET_DIR}").resolve()
+dataset = "${DATASET}"
 
+write_libero_config(
+    libero_root=project_root / "external" / "LIBERO",
+    datasets=download_dir,
+    project_root=project_root,
+)
+
+from libero.libero.utils.download_utils import check_libero_dataset, libero_dataset_download
+
+print(f"Downloading LIBERO dataset '{dataset}' to {download_dir}")
+libero_dataset_download(
+    datasets=dataset,
+    download_dir=str(download_dir),
+    check_overwrite=False,
+    use_huggingface=True,
+)
+check_libero_dataset(download_dir=str(download_dir))
+PY
+
+echo "Downloaded files:"
+find "${TARGET_DIR}" -name "*.hdf5" -o -name "*.h5" | head -20
