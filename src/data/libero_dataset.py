@@ -93,6 +93,7 @@ class LiberoDataset(Dataset[dict[str, Any]]):
         self.use_paraphrases = use_paraphrases
         self.rng = random.Random(seed)
         self.samples = self._build_index()
+        self._hdf5_handles: dict[Path, h5py.File] = {}
 
     def __len__(self) -> int:
         """Return the number of indexed timesteps."""
@@ -108,12 +109,12 @@ class LiberoDataset(Dataset[dict[str, Any]]):
             Dictionary with image tensor, state tensor, action chunk, and instruction.
         """
         sample = self.samples[index]
-        with h5py.File(sample.hdf5_path, "r") as handle:
-            group = handle[sample.group_path] if sample.group_path else handle
-            actions = np.asarray(_require_dataset(group, ACTION_DATASET_NAMES))
-            rgb_dataset = _find_rgb_dataset(group)
-            rgb = np.asarray(rgb_dataset[sample.step])
-            state = _load_state(group, sample.step)
+        handle = self._get_hdf5_handle(sample.hdf5_path)
+        group = handle[sample.group_path] if sample.group_path else handle
+        actions = np.asarray(_require_dataset(group, ACTION_DATASET_NAMES))
+        rgb_dataset = _find_rgb_dataset(group)
+        rgb = np.asarray(rgb_dataset[sample.step])
+        state = _load_state(group, sample.step)
 
         action_chunk = _make_action_chunk(actions, sample.step, self.action_chunk_size)
         instruction = sample_instruction(
@@ -158,6 +159,44 @@ class LiberoDataset(Dataset[dict[str, Any]]):
                 LOGGER.warning("Skipping invalid HDF5 file %s: %s", path, exc)
         LOGGER.info("Indexed %d LIBERO timesteps from %s", len(index), self.data_root)
         return index
+
+    def _get_hdf5_handle(self, path: Path) -> h5py.File:
+        """Return a per-process cached HDF5 file handle.
+
+        Args:
+            path: HDF5 path.
+
+        Returns:
+            Open read-only HDF5 handle.
+        """
+        resolved = path.resolve()
+        handle = self._hdf5_handles.get(resolved)
+        if handle is None or not handle.id.valid:
+            handle = h5py.File(resolved, "r")
+            self._hdf5_handles[resolved] = handle
+        return handle
+
+    def close(self) -> None:
+        """Close cached HDF5 handles owned by this dataset instance."""
+        for handle in self._hdf5_handles.values():
+            try:
+                handle.close()
+            except Exception as exc:
+                LOGGER.debug("Failed to close HDF5 handle: %s", exc)
+        self._hdf5_handles.clear()
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Drop HDF5 handles when PyTorch pickles dataset workers."""
+        state = self.__dict__.copy()
+        state["_hdf5_handles"] = {}
+        return state
+
+    def __del__(self) -> None:
+        """Best-effort cleanup for cached HDF5 handles."""
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 def _load_json_mapping(path: str | Path | None) -> dict[str, Any]:

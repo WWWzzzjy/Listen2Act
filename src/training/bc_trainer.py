@@ -31,6 +31,7 @@ from src.utils.seeding import seed_everything
 LOGGER = logging.getLogger(__name__)
 DEFAULT_VALIDATION_FRACTION = 0.05
 DEFAULT_MAX_VALIDATION_BATCHES = 50
+DEFAULT_PREFETCH_FACTOR = 4
 
 
 @dataclass
@@ -51,7 +52,7 @@ class BCTrainerConfig:
     lora_alpha: int = 32
     action_chunk_size: int = 8
     image_size: int = 224
-    num_workers: int = 4
+    num_workers: int = 8
     log_every_steps: int = 20
     checkpoint_dir: str = "checkpoints/bc_v100s"
     seed: int = 42
@@ -285,6 +286,8 @@ def build_dataloaders(
         pin_memory=torch.cuda.is_available(),
         collate_fn=collate_vla_batch,
         drop_last=True,
+        persistent_workers=train_config.num_workers > 0,
+        prefetch_factor=DEFAULT_PREFETCH_FACTOR if train_config.num_workers > 0 else None,
     )
     val_loader = DataLoader(
         val_dataset,
@@ -294,6 +297,8 @@ def build_dataloaders(
         pin_memory=torch.cuda.is_available(),
         collate_fn=collate_vla_batch,
         drop_last=False,
+        persistent_workers=train_config.num_workers > 0,
+        prefetch_factor=DEFAULT_PREFETCH_FACTOR if train_config.num_workers > 0 else None,
     )
     return train_loader, val_loader
 

@@ -9,6 +9,6 @@ export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 
 python env_setup/assert_python_version.py
 python -m src.training.bc_trainer \
-  --training-config configs/training/bc_v100s.yaml \
-  --model-config configs/model/florence2_base.yaml \
-  --data-config configs/data/libero_object.yaml
+  --training-config "${TRAINING_CONFIG:-configs/training/bc_v100s.yaml}" \
+  --model-config "${MODEL_CONFIG:-configs/model/florence2_base.yaml}" \
+  --data-config "${DATA_CONFIG:-configs/data/libero_object.yaml}"
