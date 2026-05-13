@@ -7,4 +7,5 @@ export MUJOCO_GL="${MUJOCO_GL:-egl}"
 export PYOPENGL_PLATFORM="${PYOPENGL_PLATFORM:-${MUJOCO_GL}}"
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 
+python env_setup/assert_python_version.py
 python -m src.demo.voice_to_action "$@"

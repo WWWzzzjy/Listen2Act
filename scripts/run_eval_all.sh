@@ -7,6 +7,7 @@ export MUJOCO_GL="${MUJOCO_GL:-egl}"
 export PYOPENGL_PLATFORM="${PYOPENGL_PLATFORM:-${MUJOCO_GL}}"
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
 
+python env_setup/assert_python_version.py
 python -m src.eval.eval_libero --eval-config configs/eval/libero_eval.yaml --model-config configs/model/florence2_base.yaml
 python -m src.eval.eval_bilingual --eval-config configs/eval/libero_eval.yaml --model-config configs/model/florence2_base.yaml
 python -m src.eval.eval_paraphrase --eval-config configs/eval/libero_eval.yaml --model-config configs/model/florence2_base.yaml

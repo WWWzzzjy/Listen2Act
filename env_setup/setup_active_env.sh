@@ -26,6 +26,7 @@ esac
 
 python -m pip install --force-reinstall "pip==24.0" "setuptools==70.2.0" "wheel==0.43.0"
 python -m pip install --no-build-isolation -c env_setup/libero_constraints.txt -r requirements.txt
+python env_setup/verify_model_deps.py
 
 mkdir -p external
 if [ ! -d external/LIBERO ]; then

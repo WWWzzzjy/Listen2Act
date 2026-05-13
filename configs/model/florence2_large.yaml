@@ -1,4 +1,5 @@
 model_name: microsoft/Florence-2-large
+model_revision: c8ec27656c1359454cd7e9c13133398bb4cd1424
 trust_remote_code: true
 image_size: 224
 action_chunk_size: 8
@@ -16,4 +17,3 @@ lora_target_modules:
 precision: fp16
 bf16: false
 use_flash_attention_2: false
-

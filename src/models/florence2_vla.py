@@ -28,6 +28,7 @@ class Florence2VLA(nn.Module):
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL_NAME,
+        model_revision: str | None = None,
         action_chunk_size: int = DEFAULT_ACTION_CHUNK_SIZE,
         action_dim: int = DEFAULT_ACTION_DIM,
         action_head_hidden_dim: int = 1024,
@@ -44,6 +45,7 @@ class Florence2VLA(nn.Module):
 
         Args:
             model_name: HuggingFace Florence-2 model identifier.
+            model_revision: Optional pinned HuggingFace revision for remote code safety.
             action_chunk_size: Number of actions predicted per model call.
             action_dim: Action dimension.
             action_head_hidden_dim: Hidden width for the MLP action head.
@@ -58,6 +60,7 @@ class Florence2VLA(nn.Module):
         """
         super().__init__()
         self.model_name = model_name
+        self.model_revision = model_revision
         self.action_chunk_size = action_chunk_size
         self.action_dim = action_dim
         self.processor: Any | None = None
@@ -68,6 +71,7 @@ class Florence2VLA(nn.Module):
         if load_backbone:
             self.processor, self.backbone = self._load_backbone_with_lora(
                 model_name=model_name,
+                model_revision=model_revision,
                 trust_remote_code=trust_remote_code,
                 lora_rank=lora_rank,
                 lora_alpha=lora_alpha,
@@ -100,6 +104,7 @@ class Florence2VLA(nn.Module):
         """
         return cls(
             model_name=config.get("model_name", DEFAULT_MODEL_NAME),
+            model_revision=config.get("model_revision"),
             action_chunk_size=int(config.get("action_chunk_size", DEFAULT_ACTION_CHUNK_SIZE)),
             action_dim=int(config.get("action_dim", DEFAULT_ACTION_DIM)),
             action_head_hidden_dim=int(config.get("action_head_hidden_dim", 1024)),
@@ -166,6 +171,7 @@ class Florence2VLA(nn.Module):
     def _load_backbone_with_lora(
         self,
         model_name: str,
+        model_revision: str | None,
         trust_remote_code: bool,
         lora_rank: int,
         lora_alpha: int,
@@ -179,12 +185,17 @@ class Florence2VLA(nn.Module):
         except ImportError as exc:
             raise ImportError("Install transformers and peft to load Florence2VLA.") from exc
 
-        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+        processor = AutoProcessor.from_pretrained(
+            model_name,
+            trust_remote_code=trust_remote_code,
+            revision=model_revision,
+        )
         tokenizer = getattr(processor, "tokenizer", None)
         if tokenizer is not None:
             ensure_tokenizer_padding(tokenizer)
         backbone = AutoModelForCausalLM.from_pretrained(
             model_name,
+            revision=model_revision,
             trust_remote_code=trust_remote_code,
             torch_dtype=torch.float16,
             attn_implementation="sdpa",
