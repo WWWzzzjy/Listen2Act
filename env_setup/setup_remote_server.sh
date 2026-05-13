@@ -43,13 +43,13 @@ esac
 "${PYTHON_BIN}" -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip==24.0 setuptools==70.2.0 wheel==0.43.0
-python -m pip install -r requirements.txt
+python -m pip install --no-build-isolation -r requirements.txt
 
 mkdir -p external
 if [ ! -d external/LIBERO ]; then
   git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
 fi
-python -m pip install -e external/LIBERO
+python -m pip install --no-build-isolation -e external/LIBERO
 
 cat > .env.headless <<'EOF'
 export MUJOCO_GL=egl
