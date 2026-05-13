@@ -50,8 +50,16 @@ if [ ! -d external/LIBERO ]; then
   git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
 fi
 python -m pip install --no-build-isolation -c env_setup/libero_constraints.txt -r env_setup/libero_runtime_requirements.txt
-python -m pip install --no-build-isolation --no-deps --force-reinstall "robosuite==1.4.1" "bddl==1.0.1"
+python -m pip install --no-build-isolation --no-deps --force-reinstall \
+  "robosuite==1.4.1" \
+  "bddl==1.0.1" \
+  "cloudpickle==2.1.0" \
+  "easydict==1.9" \
+  "future==0.18.2" \
+  "gym==0.25.2" \
+  "thop==0.1.1.post2209072238"
 python -m pip install --no-build-isolation -e external/LIBERO
+python env_setup/verify_libero_deps.py
 python env_setup/init_libero_config.py --libero-root external/LIBERO --datasets data/libero
 python env_setup/configure_headless_backend.py --env-file .env.headless
 
