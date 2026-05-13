@@ -129,9 +129,7 @@ class Florence2VLA(nn.Module):
         if self.backbone is None:
             raise RuntimeError("Florence2VLA was initialized without a backbone.")
         model_inputs = self._prepare_inputs(images, instructions)
-        outputs = self.backbone(**model_inputs, output_hidden_states=True, return_dict=True)
-        hidden = _extract_hidden(outputs)
-        attention_mask = model_inputs.get("attention_mask")
+        hidden, attention_mask = _encode_florence2_multimodal_features(self.backbone, model_inputs)
         pooled = _masked_mean_pool(hidden, attention_mask)
         return self.action_head(pooled)
 
@@ -237,11 +235,15 @@ def _resolve_hidden_dim(model: nn.Module | None) -> int | None:
         "hidden_size",
         "d_model",
         "text_config.hidden_size",
+        "text_config.d_model",
         "vision_config.hidden_size",
+        "vision_config.projection_dim",
         "base_model.config.hidden_size",
         "base_model.config.d_model",
+        "base_model.config.text_config.d_model",
         "base_model.model.config.hidden_size",
         "base_model.model.config.d_model",
+        "base_model.model.config.text_config.d_model",
         "projection_dim",
     )
     for candidate in candidates:
@@ -278,6 +280,80 @@ def _extract_hidden(outputs: Any) -> torch.Tensor:
             if isinstance(value, (list, tuple)) and value:
                 return value[-1]
     raise RuntimeError("Could not extract hidden states from Florence-2 outputs.")
+
+
+def _encode_florence2_multimodal_features(
+    backbone: nn.Module,
+    model_inputs: dict[str, torch.Tensor],
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """Run Florence-2 image/text encoding without invoking the decoder.
+
+    Args:
+        backbone: Florence-2 conditional generation model, possibly PEFT-wrapped.
+        model_inputs: Tokenized inputs containing ``input_ids``, ``attention_mask``,
+            and optionally ``pixel_values``.
+
+    Returns:
+        Encoder hidden states and the matching attention mask.
+    """
+    model = _unwrap_peft_model(backbone)
+    input_ids = model_inputs.get("input_ids")
+    attention_mask = model_inputs.get("attention_mask")
+    pixel_values = model_inputs.get("pixel_values")
+
+    inputs_embeds = None
+    if input_ids is not None:
+        inputs_embeds = model.get_input_embeddings()(input_ids)
+
+    if pixel_values is not None:
+        if not hasattr(model, "_encode_image"):
+            raise RuntimeError("Florence-2 backbone does not expose _encode_image.")
+        image_features = model._encode_image(pixel_values)
+        if hasattr(model, "_merge_input_ids_with_image_features"):
+            inputs_embeds, attention_mask = model._merge_input_ids_with_image_features(
+                image_features,
+                inputs_embeds,
+            )
+        else:
+            image_attention_mask = torch.ones(
+                image_features.shape[:2],
+                device=image_features.device,
+                dtype=attention_mask.dtype if attention_mask is not None else torch.long,
+            )
+            if inputs_embeds is None:
+                inputs_embeds = image_features
+                attention_mask = image_attention_mask
+            else:
+                if attention_mask is None:
+                    attention_mask = torch.ones(
+                        inputs_embeds.shape[:2],
+                        device=inputs_embeds.device,
+                        dtype=torch.long,
+                    )
+                inputs_embeds = torch.cat([image_features, inputs_embeds], dim=1)
+                attention_mask = torch.cat([image_attention_mask, attention_mask], dim=1)
+
+    if inputs_embeds is None:
+        raise ValueError("Florence-2 encoder needs image features or text input_ids.")
+
+    encoder = model.get_encoder() if hasattr(model, "get_encoder") else model.language_model.get_encoder()
+    outputs = encoder(
+        inputs_embeds=inputs_embeds,
+        attention_mask=attention_mask,
+        output_hidden_states=True,
+        return_dict=True,
+    )
+    return _extract_hidden(outputs), attention_mask
+
+
+def _unwrap_peft_model(model: nn.Module) -> nn.Module:
+    """Return the underlying base model when PEFT wraps Florence-2."""
+    base_model = getattr(model, "base_model", None)
+    if base_model is not None:
+        nested_model = getattr(base_model, "model", None)
+        if isinstance(nested_model, nn.Module):
+            return nested_model
+    return model
 
 
 def _load_model_with_safetensors_fallback(
