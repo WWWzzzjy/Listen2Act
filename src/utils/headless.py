@@ -21,21 +21,22 @@ class HeadlessStatus:
 
 
 def enforce_headless(
-    backend: str = "egl",
+    backend: str | None = None,
     fallback_backend: str = "osmesa",
     verify: bool = False,
 ) -> HeadlessStatus:
     """Set headless MuJoCo environment variables before simulator imports.
 
     Args:
-        backend: Preferred MuJoCo OpenGL backend.
+        backend: Preferred MuJoCo OpenGL backend. When omitted, an existing
+            ``MUJOCO_GL`` value is respected before falling back to EGL.
         fallback_backend: Backend used if verification of the preferred backend fails.
         verify: Whether to import MuJoCo and render a tiny offscreen context.
 
     Returns:
         A status object describing the selected backend.
     """
-    selected = backend.lower()
+    selected = (backend or os.environ.get("MUJOCO_GL") or "egl").lower()
     _set_backend_env(selected)
     if not verify:
         return HeadlessStatus(backend=selected, verified=False, message="Headless env vars set.")
@@ -80,4 +81,3 @@ def _probe_mujoco_context() -> tuple[bool, str]:
     except Exception as exc:  # pragma: no cover - depends on host drivers.
         return False, f"{type(exc).__name__}: {exc}"
     return True, "MuJoCo offscreen context initialized successfully."
-
